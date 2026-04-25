@@ -13,7 +13,7 @@ import os
 import re
 from pathlib import Path
 
-from calibration import blend_wins, linreg_projected_wins
+from calibration import blend_wins, linreg_projected_wins, wins_based_prob
 from features import baseline_projected_wins, clamp, load_rows, sigmoid
 
 
@@ -252,18 +252,16 @@ def _call_grok(team_state: dict, fallback: dict) -> dict:
     return prediction
 
 
-_WIN_BLEND_ALPHA = 0.85
-
-
 def _calibrate(prediction: dict, team_state: dict) -> dict:
     raw_wins = float(prediction["projected_wins"])
-    blended = blend_wins(raw_wins, team_state, alpha=_WIN_BLEND_ALPHA)
+    blended = blend_wins(raw_wins, team_state)
     blended = clamp(blended, 40.0, 122.0)
     half_width = max(7.0, abs(prediction["win_interval_80"][1] - prediction["win_interval_80"][0]) / 2.0)
     new_low = clamp(blended - half_width, 35.0, blended)
     new_high = clamp(blended + half_width, blended, 125.0)
+    playoff_prob = clamp(wins_based_prob(blended, "made_playoffs"), 0.001, 0.999)
     return {
-        "playoff_prob": prediction["playoff_prob"],
+        "playoff_prob": playoff_prob,
         "division_winner_prob": prediction["division_winner_prob"],
         "league_champion_prob": prediction["league_champion_prob"],
         "world_series_champion_prob": prediction["world_series_champion_prob"],

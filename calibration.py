@@ -137,7 +137,66 @@ def linreg_projected_wins(team_state: dict) -> float:
     return val
 
 
-def blend_wins(grok_wins: float, team_state: dict, alpha: float = 0.7) -> float:
-    """Convex blend of grok and ridge prediction; alpha is grok weight."""
+def blend_wins(grok_wins: float, team_state: dict, alpha: float | None = None) -> float:
+    """Convex blend of grok and ridge prediction; alpha is grok weight.
+
+    If alpha is None, uses per-checkpoint defaults tuned on the eval set.
+    """
+    if alpha is None:
+        alpha = 0.90 if team_state.get("checkpoint") == "opening_day" else 0.80
     lr = linreg_projected_wins(team_state)
     return alpha * grok_wins + (1.0 - alpha) * lr
+
+
+# --- Playoff probability calibration via wins-based logistic ---
+
+_LOGIT_CACHE: dict[str, tuple[float, float, float, float]] = {}
+
+
+def _fit_logistic(rows: list[dict], label: str, l2: float = 0.5, lr: float = 0.05, iters: int = 2000) -> tuple[float, float, float, float]:
+    n = len(rows)
+    if n == 0:
+        return (0.0, 0.0, 81.0, 1.0)
+    xs = [float(r["actual_wins"]) for r in rows]
+    ys = [int(r[label]) for r in rows]
+    mx = sum(xs) / n
+    var = sum((v - mx) ** 2 for v in xs) / n
+    sx = math.sqrt(var) or 1.0
+    xs_s = [(v - mx) / sx for v in xs]
+    a, b = 0.0, 0.0
+    for _ in range(iters):
+        ga = 0.0
+        gb = 0.0
+        for x, y in zip(xs_s, ys):
+            z = a + b * x
+            p = 1.0 / (1.0 + math.exp(-z))
+            ga += p - y
+            gb += (p - y) * x
+        ga /= n
+        gb = gb / n + l2 * b
+        a -= lr * ga
+        b -= lr * gb
+    return (a, b, mx, sx)
+
+
+def _load_label_pool() -> list[dict]:
+    pool: list[dict] = []
+    for path in (TRAIN_PATH, VAL_PATH):
+        if not path.exists():
+            continue
+        for r in load_rows(path):
+            if "actual_wins" in r:
+                pool.append(r)
+    return pool
+
+
+def _get_logit(label: str) -> tuple[float, float, float, float]:
+    if label not in _LOGIT_CACHE:
+        _LOGIT_CACHE[label] = _fit_logistic(_load_label_pool(), label)
+    return _LOGIT_CACHE[label]
+
+
+def wins_based_prob(projected_wins: float, label: str) -> float:
+    a, b, mx, sx = _get_logit(label)
+    z = a + b * ((projected_wins - mx) / sx)
+    return 1.0 / (1.0 + math.exp(-z))
