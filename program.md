@@ -5,7 +5,7 @@ Improve a frozen-benchmark MLB season-long standings model. The eval asks your c
 ## Setup
 
 1. **Read the in-scope files**:
-   - `agent.py` - baseline predictor. You modify this.
+   - `agent.py` - API harness around Grok-compatible chat completions, with a keyless local fallback. You modify this.
    - `features.py` - feature engineering helpers. You modify this.
    - `knowledge/` - optional baseball projection knowledge base. You may read, edit, or extend this.
    - `knowledge_tools.py` - optional helper for listing, reading, and searching `knowledge/`.
@@ -36,7 +36,7 @@ The primary target is `score`, a composite that rewards final rank accuracy, win
 - Add helper modules, prompt templates, model configs, small public-data snapshots, or local training scripts outside `eval/`.
 - Read, edit, extend, or ignore the optional `knowledge/` references. Treat them as hypotheses, not rules.
 - Use the golf-autoresearch loop: propose a baseball-specific hypothesis, edit code, run eval, keep or revert, commit the result.
-- Call a hosted frontier model during prediction or data generation if credentials are available. A Grok-style model is the default suggestion, but keep the exact model configurable through environment variables such as `XAI_MODEL`.
+- Improve the hosted-model harness in `agent.py`. It already calls a Grok-compatible API when `XAI_API_KEY` is set and falls back locally otherwise.
 - Build richer prompts, ensembling, calibration layers, and feature extraction around the hosted-model response.
 - Keep a keyless fallback path so `bash eval/eval.sh` still runs when API credentials are absent.
 - Re-test golf findings instead of assuming them: binary vs ordinal/regression framing, CoT off vs on, hosted frontier model vs local heuristic, and prompt-only vs feature-plus-prompt systems.

@@ -3,6 +3,7 @@ results.tsv
 __pycache__/
 .pytest_cache/
 .env
+.cache/
 *.pyc
 data/*.parquet
 data/raw/
