@@ -1,8 +1,8 @@
 """Starter predictor for the MLB Season Predictor hive task.
 
 This baseline is intentionally modest: it maps Depth Charts-style team WAR to
-projected wins and playoff probability. It does not use a teacher LLM,
-distillation, player-level Monte Carlo, Statcast, or roster tables.
+projected wins and playoff probability. The task is API-first and has no GPU
+requirement, but this starter keeps a keyless CPU fallback.
 """
 
 from __future__ import annotations

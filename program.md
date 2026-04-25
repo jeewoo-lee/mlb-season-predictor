@@ -1,6 +1,6 @@
 # MLB Season Predictor
 
-Improve a frozen-benchmark MLB season-long playoff probability model. The eval asks your code for each team's probability of making the playoffs, plus a projected win total and 80% interval.
+Improve a frozen-benchmark MLB season-long playoff probability model. The eval asks your code for each team's probability of making the playoffs, plus a projected win total and 80% interval. This task has **no GPU requirement**; the intended improvement path is better prompting, features, calibration, and optional API calls to a strong hosted model.
 
 ## Setup
 
@@ -30,21 +30,34 @@ The primary target is binary playoff qualification. The eval also scores project
 - Modify `agent.py`, `features.py`, and `requirements.txt`.
 - Add helper modules, prompt templates, model configs, small public-data snapshots, or local training scripts outside `eval/`.
 - Use the golf-autoresearch loop: propose a baseball-specific hypothesis, edit code, run eval, keep or revert, commit the result.
-- Try teacher-to-student distillation: open-weights teacher labels synthetic or historical states, then SFT a small student.
-- Run training through Tinker, Modal, Together AI, or another compute backend if the final eval remains self-contained.
+- Call a hosted frontier model during prediction or data generation if credentials are available. A Grok-style model is the default suggestion, but keep the exact model configurable through environment variables such as `XAI_MODEL`.
+- Build richer prompts, ensembling, calibration layers, and feature extraction around the hosted-model response.
+- Keep a keyless fallback path so `bash eval/eval.sh` still runs when API credentials are absent.
 - Use player-level Monte Carlo, uncertainty estimates, schedule simulation, roster-depth modeling, injury priors, and richer teacher prompts.
-- Re-test golf findings instead of assuming them: binary vs ordinal/regression framing, CoT off vs on, open-weights vs closed teacher, SFT student vs zero-shot teacher.
+- Re-test golf findings instead of assuming them: binary vs ordinal/regression framing, CoT off vs on, hosted frontier model vs local heuristic, and prompt-only vs feature-plus-prompt systems.
 
 **What you CANNOT do:**
 - Modify `eval/`, `prepare.sh`, or `eval/test_data/`.
 - Read frozen 2024-2025 labels from training or inference code except through the eval call.
-- Use internet access during eval.
+- Require a GPU.
+- Hard-code secrets, API keys, or account-specific endpoints.
 - Use future information unavailable at the checkpoint being predicted.
 - Replace the frozen benchmark with new labels or a different scoring script.
 
 **Goal: minimize `log_loss`.** Log-loss is computed on playoff qualification probabilities; lower is better. The eval also reports Brier score, win-total MAE, and a 0.5-threshold accuracy count.
 
 **Simplicity criterion:** All else equal, simpler is better. Keep experiments reproducible and document meaningful runs in `results.tsv`.
+
+## Hosted Model Defaults
+
+This task is deliberately API-first rather than GPU-first. Suggested defaults:
+
+- Provider: xAI-compatible or OpenAI-compatible chat API.
+- Model env var: `XAI_MODEL`, defaulting in your code to a strong Grok-family model such as `grok-4.20` if available.
+- Credential env var: `XAI_API_KEY`.
+- Endpoint env var: `XAI_BASE_URL`, if the SDK requires one.
+
+Do not rely on a specific model string being permanently available. Make model/provider choices configurable and record them in `results.tsv`.
 
 ## Starter Feature Ideas
 
@@ -55,7 +68,7 @@ Do not treat these as mandatory. They are high-leverage directions to test and p
 - Context: age curves, schedule strength, divisional strength, multi-year park factor, injury durability priors, projected call-ups.
 - Methodology: player-level Monte Carlo, output distributions, multi-source projection blending, mid-season update path, and calibration-first binary framing.
 
-## Teacher Prompt Template
+## Hosted Model Prompt Template
 
 ```text
 You are a baseball analyst projecting season outcomes.
@@ -80,7 +93,7 @@ Park factor (3-yr avg): {park}
 Recent transactions / injury context:
 {transactions}
 
-Question: Will this team make the playoffs in {year}? Answer with "yes" or "no" plus a probability between 0 and 1.
+Question: Will this team make the playoffs in {year}? Answer with "yes" or "no" plus a probability between 0 and 1, a projected win total, and an 80% win interval.
 ```
 
 ## Output Contract
