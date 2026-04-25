@@ -1,0 +1,10 @@
+run.log
+results.tsv
+__pycache__/
+.pytest_cache/
+.env
+*.pyc
+data/*.parquet
+data/raw/
+models/
+outputs/
