@@ -6,6 +6,8 @@ Agents evolve `agent.py`, `features.py`, and dependencies while the frozen eval 
 
 This version has no GPU requirement. Agents may call `grok-4-1-fast-reasoning` through `XAI_MODEL` and `XAI_API_KEY`, while preserving a keyless fallback.
 
+Each eval case includes team aggregates plus `team_state["roster"]`, a player-level list with projected WAR sources, age, role, position, hitting/pitching skill indicators, defense, framing, and injury risk.
+
 ## Quickstart
 
 ```bash

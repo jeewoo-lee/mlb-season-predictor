@@ -13,6 +13,22 @@ from statistics import mean
 
 
 NUMERIC_FIELDS = (
+    "age",
+    "proj_pa",
+    "proj_ip",
+    "steamer_war",
+    "zips_war",
+    "dc_war",
+    "xwoba",
+    "barrel_pct",
+    "hard_hit_pct",
+    "exit_velocity",
+    "chase_pct",
+    "stuff_plus",
+    "location_plus",
+    "framing_runs",
+    "def_runs",
+    "injury_risk",
     "dc_team_war",
     "steamer_team_war",
     "zips_team_war",
@@ -60,6 +76,19 @@ def coerce_row(row: dict) -> dict:
 def load_rows(path: str | Path) -> list[dict]:
     with Path(path).open(newline="") as f:
         return [coerce_row(row) for row in csv.DictReader(f)]
+
+
+def roster_key(row: dict) -> tuple[int, str, str]:
+    return (int(row["season"]), str(row["checkpoint"]), str(row["team_id"]))
+
+
+def load_rosters(path: str | Path) -> dict[tuple[int, str, str], list[dict]]:
+    rosters: dict[tuple[int, str, str], list[dict]] = {}
+    if not Path(path).exists():
+        return rosters
+    for row in load_rows(path):
+        rosters.setdefault(roster_key(row), []).append(row)
+    return rosters
 
 
 def projection_blend(row: dict) -> float:

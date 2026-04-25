@@ -8,9 +8,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_PATH = ROOT / "eval" / "test_data" / "mlb_frozen_2024_2025.csv"
+ROSTER_PATH = ROOT / "eval" / "test_data" / "player_states_2024_2025.csv"
 sys.path.insert(0, str(ROOT))
 
-from features import clamp, load_rows  # noqa: E402
+from features import clamp, load_rosters, load_rows, roster_key  # noqa: E402
 
 
 def load_agent():
@@ -30,13 +31,16 @@ def main() -> None:
 
     agent = load_agent()
     rows = load_rows(TEST_PATH)
+    rosters = load_rosters(ROSTER_PATH)
     log_loss = 0.0
     brier = 0.0
     win_abs_error = 0.0
     correct = 0
 
     for row in rows:
-        pred = agent.predict(dict(row))
+        team_state = dict(row)
+        team_state["roster"] = rosters.get(roster_key(row), [])
+        pred = agent.predict(team_state)
         prob = clamp(float(pred["playoff_prob"]), 1e-6, 1.0 - 1e-6)
         wins = float(pred["projected_wins"])
         y = int(row["made_playoffs"])
