@@ -124,7 +124,7 @@ def main() -> None:
     ws_champ_log_loss = world_series_loss / total
     playoff_log_loss = playoff_loss / total
     win_mae = win_abs_error / total
-    score = (
+    composite_loss = (
         0.50 * rank_mae
         + 0.15 * overall_rank_mae
         + 0.10 * division_rank_mae
@@ -133,9 +133,11 @@ def main() -> None:
         + 0.06 * ws_champ_log_loss
         + 0.03 * playoff_log_loss
     )
+    score = -composite_loss
 
     print("---")
     print(f"score:            {score:.4f}")
+    print(f"composite_loss:   {composite_loss:.4f}")
     print(f"rank_mae:         {rank_mae:.4f}")
     print(f"overall_rank_mae: {overall_rank_mae:.4f}")
     print(f"division_rank_mae:{division_rank_mae:.4f}")

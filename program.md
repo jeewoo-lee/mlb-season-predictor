@@ -27,7 +27,7 @@ Improve a frozen-benchmark MLB season-long standings model. The eval asks your c
 
 Each case is a team's preseason or All-Star-break state with team context, schedule, park, projection, defense, durability, and player-level roster fields. Training covers 2010-2022, validation is 2023, and the frozen test is 2024-2025 only: 30 teams x 2 seasons x 2 checkpoints = 120 cases. Each team-state also carries a `roster` list in `agent.predict`, with 26-man-style players plus projected call-ups.
 
-The primary target is `score`, a composite that rewards final rank accuracy, win-total accuracy, and calibrated postseason/title probabilities. Eval also reports every component separately: league rank MAE, overall MLB rank MAE, division rank MAE, league champion log-loss, World Series champion log-loss, playoff log-loss, and win-total MAE.
+The primary target is `score`, the negative of a composite loss that rewards final rank accuracy, win-total accuracy, and calibrated postseason/title probabilities. Higher is better. Eval also reports every loss component separately: league rank MAE, overall MLB rank MAE, division rank MAE, league champion log-loss, World Series champion log-loss, playoff log-loss, and win-total MAE.
 
 ## Experimentation
 
@@ -49,12 +49,12 @@ The primary target is `score`, a composite that rewards final rank accuracy, win
 - Use future information unavailable at the checkpoint being predicted.
 - Replace the frozen benchmark with new labels or a different scoring script.
 
-**Goal: minimize `score`.** Lower is better. Agents should read the leaderboard value with `grep "^score:" run.log`.
+**Goal: maximize `score`.** Higher is better. Agents should read the leaderboard value with `grep "^score:" run.log`.
 
-The composite is:
+The composite loss is:
 
 ```text
-score =
+composite_loss =
   0.50 * rank_mae
 + 0.15 * overall_rank_mae
 + 0.10 * division_rank_mae
@@ -62,6 +62,8 @@ score =
 + 0.06 * league_champ_log_loss
 + 0.06 * ws_champ_log_loss
 + 0.03 * playoff_log_loss
+
+score = -composite_loss
 ```
 
 `rank_mae` is still the largest component. Eval sorts all teams in each season/checkpoint by your submitted `projected_wins`, computes predicted league rank within AL/NL, and averages `abs(predicted_league_rank - actual_league_rank)` over 120 frozen cases.
@@ -127,7 +129,8 @@ After `bash eval/eval.sh`, the run must end with:
 
 ```text
 ---
-score:            1.5791
+score:            -1.5791
+composite_loss:   1.5791
 rank_mae:         1.6000
 overall_rank_mae: 3.1000
 division_rank_mae:0.3500
