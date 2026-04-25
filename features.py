@@ -46,8 +46,14 @@ NUMERIC_FIELDS = (
     "age_risk",
     "baseruns_win_pct",
     "prev_win_pct",
+    "overall_rank",
+    "league_rank",
+    "division_rank",
     "actual_wins",
     "made_playoffs",
+    "won_division",
+    "league_champion",
+    "world_series_champion",
 )
 
 

@@ -1,6 +1,6 @@
 # MLB Season Predictor
 
-Improve a frozen-benchmark MLB season-long playoff probability model. The eval asks your code for each team's probability of making the playoffs, plus a projected win total and 80% interval. This task has **no GPU requirement**; the intended improvement path is better prompting, features, calibration, and optional API calls to a strong hosted model.
+Improve a frozen-benchmark MLB season-long standings model. The eval asks your code for each team's projected win total, championship probabilities, and optional postseason probabilities, then scores final ranks and title outcomes. This task has **no GPU requirement**; the intended improvement path is better prompting, features, calibration, and optional API calls to a strong hosted model.
 
 ## Setup
 
@@ -18,14 +18,14 @@ Improve a frozen-benchmark MLB season-long playoff probability model. The eval a
    - `prepare.sh` - reproducible data setup. Do not modify.
 2. **Run prepare**: `bash prepare.sh` to generate the bundled public-style training, validation, and frozen snapshot files.
 3. **Verify data exists**: Check that team and player files exist under `data/train/`, `data/val/`, and `eval/test_data/`.
-4. **Initialize results.tsv**: Create `results.tsv` with `experiment_id	hypothesis	log_loss	brier	win_mae	notes`.
+4. **Initialize results.tsv**: Create `results.tsv` with `experiment_id	hypothesis	rank_mae	overall_rank_mae	league_champ_log_loss	win_mae	notes`.
 5. **Run baseline**: `bash eval/eval.sh` to establish the starting score.
 
 ## The benchmark
 
 Each case is a team's preseason or All-Star-break state: roster-level projection blend, schedule and park context, injury snapshot, and player-level roster construction features. Training covers 2010-2022, validation is 2023, and the frozen test is 2024-2025 only: 30 teams x 2 seasons x 2 checkpoints = 120 cases. Each team-state also carries a `roster` list in `agent.predict`, with 26-man-style players plus projected call-ups and fields such as age, role, position, Steamer/ZiPS/Depth Charts WAR, xwOBA, barrel rate, hard-hit rate, stuff+, location+, catcher framing, defense, and injury risk.
 
-The primary target is binary playoff qualification. The eval also scores projected regular-season wins, but leaderboard ranking should use log-loss.
+The primary target is final league rank: 1-15 within the AL or NL. Eval also reports overall MLB rank MAE, division rank MAE, league champion log-loss, World Series champion log-loss, playoff log-loss, and win-total MAE.
 
 ## Experimentation
 
@@ -47,15 +47,15 @@ The primary target is binary playoff qualification. The eval also scores project
 - Use future information unavailable at the checkpoint being predicted.
 - Replace the frozen benchmark with new labels or a different scoring script.
 
-**Goal: minimize `log_loss`.** Log-loss is computed on playoff qualification probabilities; lower is better. The eval also reports Brier score, win-total MAE, and a 0.5-threshold accuracy count.
+**Goal: minimize `rank_mae`.** Eval sorts all teams in each season/checkpoint by your submitted `projected_wins`, computes predicted league rank within AL/NL, and averages `abs(predicted_league_rank - actual_league_rank)` over 120 frozen cases. Lower is better.
 
-For each frozen case with label `y` in `{0, 1}` and submitted playoff probability `p`, eval clamps `p` to `[1e-6, 1 - 1e-6]` and adds:
+Champion probabilities are scored with standard binary log-loss. For each frozen case with label `y` in `{0, 1}` and submitted probability `p`, eval clamps `p` to `[1e-6, 1 - 1e-6]` and adds:
 
 ```text
 -(y * log(p) + (1 - y) * log(1 - p))
 ```
 
-The printed `log_loss` is the mean over all 120 frozen cases. A confident wrong answer is punished heavily; calibrated probabilities matter more than threshold accuracy.
+The printed champion log-loss values are means over all 120 frozen cases. A confident wrong answer is punished heavily; calibrated title probabilities matter more than threshold accuracy.
 
 **Simplicity criterion:** All else equal, simpler is better. Keep experiments reproducible and document meaningful runs in `results.tsv`.
 
@@ -104,7 +104,7 @@ Park factor (3-yr avg): {park}
 Recent transactions / injury context:
 {transactions}
 
-Question: Will this team make the playoffs in {year}? Answer with "yes" or "no" plus a probability between 0 and 1, a projected win total, and an 80% win interval.
+Question: Where will this team finish in {year}? Return a projected win total, 80% win interval, playoff probability, division-winner probability, league-champion probability, and World-Series-champion probability.
 ```
 
 ## Output Contract
@@ -116,6 +116,9 @@ def predict(team_state: dict) -> dict:
     roster = team_state["roster"]
     return {
         "playoff_prob": 0.42,
+        "division_winner_prob": 0.20,
+        "league_champion_prob": 0.07,
+        "world_series_champion_prob": 0.03,
         "projected_wins": 82.0,
         "win_interval_80": [74.0, 90.0],
     }
@@ -125,9 +128,13 @@ After `bash eval/eval.sh`, the run must end with:
 
 ```text
 ---
-log_loss:         0.6234
-brier:            0.2103
-win_mae:          5.7
-correct:          78
+rank_mae:         1.7167
+overall_rank_mae: 3.3333
+division_rank_mae:0.4833
+league_champ_log_loss: 0.1710
+ws_champ_log_loss:0.1046
+playoff_log_loss: 0.6231
+win_mae:          11.6
+correct:          24
 total:            120
 ```

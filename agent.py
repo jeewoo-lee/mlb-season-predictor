@@ -66,9 +66,15 @@ def predict(team_state: dict) -> dict:
     # Deliberately underconfident starter calibration. This keeps the baseline
     # functional while leaving room for richer roster and simulation methods.
     playoff_prob = clamp(sigmoid(0.10 * logit), 0.03, 0.97)
+    division_winner_prob = clamp(sigmoid((projected_wins - 88.0) / 7.0), 0.01, 0.80)
+    league_champion_prob = clamp(sigmoid((projected_wins - 94.0) / 6.0) * 0.30, 0.005, 0.45)
+    world_series_champion_prob = clamp(sigmoid((projected_wins - 97.0) / 6.0) * 0.16, 0.002, 0.30)
     spread = 8.5 + 0.05 * abs(projected_wins - 81.0)
     return {
         "playoff_prob": playoff_prob,
+        "division_winner_prob": division_winner_prob,
+        "league_champion_prob": league_champion_prob,
+        "world_series_champion_prob": world_series_champion_prob,
         "projected_wins": projected_wins,
         "win_interval_80": [
             clamp(projected_wins - spread, 40.0, 116.0),

@@ -18,13 +18,27 @@ teams = [
     "PHI","PIT","SD","SEA","SF","STL","TB","TEX","TOR","WSH",
 ]
 
+team_meta = {
+    "ARI": ("NL", "NL West"), "ATL": ("NL", "NL East"), "BAL": ("AL", "AL East"),
+    "BOS": ("AL", "AL East"), "CHC": ("NL", "NL Central"), "CHW": ("AL", "AL Central"),
+    "CIN": ("NL", "NL Central"), "CLE": ("AL", "AL Central"), "COL": ("NL", "NL West"),
+    "DET": ("AL", "AL Central"), "HOU": ("AL", "AL West"), "KC": ("AL", "AL Central"),
+    "LAA": ("AL", "AL West"), "LAD": ("NL", "NL West"), "MIA": ("NL", "NL East"),
+    "MIL": ("NL", "NL Central"), "MIN": ("AL", "AL Central"), "NYM": ("NL", "NL East"),
+    "NYY": ("AL", "AL East"), "OAK": ("AL", "AL West"), "PHI": ("NL", "NL East"),
+    "PIT": ("NL", "NL Central"), "SD": ("NL", "NL West"), "SEA": ("AL", "AL West"),
+    "SF": ("NL", "NL West"), "STL": ("NL", "NL Central"), "TB": ("AL", "AL East"),
+    "TEX": ("AL", "AL West"), "TOR": ("AL", "AL East"), "WSH": ("NL", "NL East"),
+}
+
 header = [
-    "season","checkpoint","team_id","team_name","dc_team_war","steamer_team_war",
+    "season","checkpoint","team_id","team_name","league","division","dc_team_war","steamer_team_war",
     "zips_team_war","pos_war","sp_war","rp_war","bp_high_lev_war",
     "rotation_depth_war","catcher_framing_runs","def_blend_runs",
     "schedule_strength","division_strength","park_factor","injury_war_lost",
     "age_risk","baseruns_win_pct","prev_win_pct","checkpoint_wins_above_pace",
-    "actual_wins","made_playoffs",
+    "actual_wins","overall_rank","league_rank","division_rank","made_playoffs",
+    "won_division","league_champion","world_series_champion",
 ]
 
 player_header = [
@@ -72,11 +86,14 @@ def make_row(season: int, team: str, idx: int, checkpoint: str):
     true_wins = max(50.0, min(110.0, true_wins))
     playoff_p = sigmoid(-1.02 + 0.145 * (true_wins - 84.0))
     made = int(rng.random() < playoff_p)
+    league, division_name = team_meta[team]
     return {
         "season": season,
         "checkpoint": checkpoint,
         "team_id": team,
         "team_name": f"{team} Baseball Club",
+        "league": league,
+        "division": division_name,
         "dc_team_war": dc,
         "steamer_team_war": steamer,
         "zips_team_war": zips,
@@ -97,6 +114,12 @@ def make_row(season: int, team: str, idx: int, checkpoint: str):
         "checkpoint_wins_above_pace": pace,
         "actual_wins": round(true_wins, 1),
         "made_playoffs": made,
+        "won_division": 0,
+        "league_champion": 0,
+        "world_series_champion": 0,
+        "overall_rank": 0,
+        "league_rank": 0,
+        "division_rank": 0,
     }
 
 
@@ -165,6 +188,32 @@ def make_players(season: int, team: str, idx: int, checkpoint: str, team_row: di
     return players
 
 
+def assign_outcomes(rows: list[dict]) -> None:
+    groups: dict[tuple[int, str], list[dict]] = {}
+    for row in rows:
+        groups.setdefault((int(row["season"]), str(row["checkpoint"])), []).append(row)
+    for group_rows in groups.values():
+        overall = sorted(group_rows, key=lambda r: (-float(r["actual_wins"]), str(r["team_id"])))
+        for rank, row in enumerate(overall, start=1):
+            row["overall_rank"] = rank
+            row["world_series_champion"] = int(rank == 1)
+        for league in ("AL", "NL"):
+            league_rows = [row for row in overall if row["league"] == league]
+            for rank, row in enumerate(league_rows, start=1):
+                row["league_rank"] = rank
+                row["league_champion"] = int(rank == 1)
+                row["made_playoffs"] = int(rank <= 6)
+        divisions = sorted({row["division"] for row in group_rows})
+        for division_name in divisions:
+            division_rows = sorted(
+                [row for row in group_rows if row["division"] == division_name],
+                key=lambda r: (-float(r["actual_wins"]), str(r["team_id"])),
+            )
+            for rank, row in enumerate(division_rows, start=1):
+                row["division_rank"] = rank
+                row["won_division"] = int(rank == 1)
+
+
 def write(team_path: str, player_path: str, seasons: list[int], checkpoints: list[str]):
     rows = []
     player_rows = []
@@ -174,6 +223,7 @@ def write(team_path: str, player_path: str, seasons: list[int], checkpoints: lis
                 row = make_row(season, team, idx, checkpoint)
                 rows.append(row)
                 player_rows.extend(make_players(season, team, idx, checkpoint, row))
+    assign_outcomes(rows)
     with Path(team_path).open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=header)
         writer.writeheader()
