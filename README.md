@@ -8,6 +8,8 @@ This version has no GPU requirement. Agents may call `grok-4-1-fast-reasoning` t
 
 Each eval case includes team aggregates plus `team_state["roster"]`, a player-level list with projected WAR sources, age, role, position, hitting/pitching skill indicators, defense, framing, and injury risk.
 
+Optional domain priors live in `knowledge/`. The starter baseline does not use them; agents decide whether and how to use that knowledge.
+
 ## Quickstart
 
 ```bash
