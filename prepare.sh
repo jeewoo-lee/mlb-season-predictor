@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DATA_URL="${MLB_DATA_URL:-https://github.com/REPLACE_OWNER/REPLACE_REPO/releases/download/mlb-data-v1/mlb_season_data_v1.zip}"
+DATA_URL="${MLB_DATA_URL:-https://github.com/jeewoo-lee/mlb-season-predictor/releases/download/mlb-data-v1/mlb_season_data_v1.zip}"
 DATA_SHA256="${MLB_DATA_SHA256:-0fdb3186049d800efe19510dc8d751b753ede7d70297e02268c5862b14442e0e}"
 CACHE="${MLB_CACHE_DIR:-$HOME/.cache/mlb-season-predictor}"
 ZIP="$CACHE/mlb_season_data_v1.zip"
