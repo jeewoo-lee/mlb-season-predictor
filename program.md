@@ -18,14 +18,14 @@ Improve a frozen-benchmark MLB season-long standings model. The eval asks your c
    - `prepare.sh` - reproducible data setup. Do not modify.
 2. **Run prepare**: `bash prepare.sh` to generate the bundled public-style training, validation, and frozen snapshot files.
 3. **Verify data exists**: Check that team and player files exist under `data/train/`, `data/val/`, and `eval/test_data/`.
-4. **Initialize results.tsv**: Create `results.tsv` with `experiment_id	hypothesis	rank_mae	overall_rank_mae	league_champ_log_loss	win_mae	notes`.
+4. **Initialize results.tsv**: Create `results.tsv` with `experiment_id	hypothesis	score	rank_mae	overall_rank_mae	league_champ_log_loss	win_mae	notes`.
 5. **Run baseline**: `bash eval/eval.sh` to establish the starting score.
 
 ## The benchmark
 
 Each case is a team's preseason or All-Star-break state: roster-level projection blend, schedule and park context, injury snapshot, and player-level roster construction features. Training covers 2010-2022, validation is 2023, and the frozen test is 2024-2025 only: 30 teams x 2 seasons x 2 checkpoints = 120 cases. Each team-state also carries a `roster` list in `agent.predict`, with 26-man-style players plus projected call-ups and fields such as age, role, position, Steamer/ZiPS/Depth Charts WAR, xwOBA, barrel rate, hard-hit rate, stuff+, location+, catcher framing, defense, and injury risk.
 
-The primary target is final league rank: 1-15 within the AL or NL. Eval also reports overall MLB rank MAE, division rank MAE, league champion log-loss, World Series champion log-loss, playoff log-loss, and win-total MAE.
+The primary target is `score`, a composite that rewards final rank accuracy, win-total accuracy, and calibrated postseason/title probabilities. Eval also reports every component separately: league rank MAE, overall MLB rank MAE, division rank MAE, league champion log-loss, World Series champion log-loss, playoff log-loss, and win-total MAE.
 
 ## Experimentation
 
@@ -47,7 +47,22 @@ The primary target is final league rank: 1-15 within the AL or NL. Eval also rep
 - Use future information unavailable at the checkpoint being predicted.
 - Replace the frozen benchmark with new labels or a different scoring script.
 
-**Goal: minimize `rank_mae`.** Eval sorts all teams in each season/checkpoint by your submitted `projected_wins`, computes predicted league rank within AL/NL, and averages `abs(predicted_league_rank - actual_league_rank)` over 120 frozen cases. Lower is better.
+**Goal: minimize `score`.** Lower is better. Agents should read the leaderboard value with `grep "^score:" run.log`.
+
+The composite is:
+
+```text
+score =
+  0.50 * rank_mae
++ 0.15 * overall_rank_mae
++ 0.10 * division_rank_mae
++ 0.10 * (win_mae / 5.0)
++ 0.06 * league_champ_log_loss
++ 0.06 * ws_champ_log_loss
++ 0.03 * playoff_log_loss
+```
+
+`rank_mae` is still the largest component. Eval sorts all teams in each season/checkpoint by your submitted `projected_wins`, computes predicted league rank within AL/NL, and averages `abs(predicted_league_rank - actual_league_rank)` over 120 frozen cases.
 
 Champion probabilities are scored with standard binary log-loss. For each frozen case with label `y` in `{0, 1}` and submitted probability `p`, eval clamps `p` to `[1e-6, 1 - 1e-6]` and adds:
 
@@ -128,6 +143,7 @@ After `bash eval/eval.sh`, the run must end with:
 
 ```text
 ---
+score:            1.6746
 rank_mae:         1.7167
 overall_rank_mae: 3.3333
 division_rank_mae:0.4833

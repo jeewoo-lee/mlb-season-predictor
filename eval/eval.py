@@ -117,14 +117,32 @@ def main() -> None:
         playoff_loss += binary_loss(pred.get("playoff_prob", 0.5), int(row["made_playoffs"]))
 
     total = len(scored_rows)
+    rank_mae = league_rank_abs_error / total
+    overall_rank_mae = overall_rank_abs_error / total
+    division_rank_mae = division_rank_abs_error / total
+    league_champ_log_loss = league_champion_loss / total
+    ws_champ_log_loss = world_series_loss / total
+    playoff_log_loss = playoff_loss / total
+    win_mae = win_abs_error / total
+    score = (
+        0.50 * rank_mae
+        + 0.15 * overall_rank_mae
+        + 0.10 * division_rank_mae
+        + 0.10 * (win_mae / 5.0)
+        + 0.06 * league_champ_log_loss
+        + 0.06 * ws_champ_log_loss
+        + 0.03 * playoff_log_loss
+    )
+
     print("---")
-    print(f"rank_mae:         {league_rank_abs_error / total:.4f}")
-    print(f"overall_rank_mae: {overall_rank_abs_error / total:.4f}")
-    print(f"division_rank_mae:{division_rank_abs_error / total:.4f}")
-    print(f"league_champ_log_loss: {league_champion_loss / total:.4f}")
-    print(f"ws_champ_log_loss:{world_series_loss / total:.4f}")
-    print(f"playoff_log_loss: {playoff_loss / total:.4f}")
-    print(f"win_mae:          {win_abs_error / total:.1f}")
+    print(f"score:            {score:.4f}")
+    print(f"rank_mae:         {rank_mae:.4f}")
+    print(f"overall_rank_mae: {overall_rank_mae:.4f}")
+    print(f"division_rank_mae:{division_rank_mae:.4f}")
+    print(f"league_champ_log_loss: {league_champ_log_loss:.4f}")
+    print(f"ws_champ_log_loss:{ws_champ_log_loss:.4f}")
+    print(f"playoff_log_loss: {playoff_log_loss:.4f}")
+    print(f"win_mae:          {win_mae:.1f}")
     print(f"correct:          {exact_league_rank}")
     print(f"total:            {total}")
 

@@ -2,7 +2,7 @@
 
 Autoresearch task for improving a season-long MLB standings and championship predictor.
 
-Agents evolve `agent.py`, `features.py`, and dependencies while the frozen eval scores 2024-2025 Opening Day and All-Star-break team states. The primary metric is `rank_mae`: mean absolute error on final league rank, where each team ranks 1-15 within the AL or NL.
+Agents evolve `agent.py`, `features.py`, and dependencies while the frozen eval scores 2024-2025 Opening Day and All-Star-break team states. The primary metric is `score`, a lower-is-better composite of rank accuracy, win error, and postseason/title calibration.
 
 This version has no GPU requirement. Agents may call `grok-4-1-fast-reasoning` through `XAI_MODEL` and `XAI_API_KEY`, while preserving a keyless fallback.
 
@@ -15,7 +15,7 @@ bash prepare.sh
 bash eval/eval.sh
 ```
 
-Expected starter baseline: `rank_mae` around `1.5` to `2.5`.
+Expected starter baseline: `score` around `1.6` to `2.0`.
 
 Leaderboard after upload: `hive/mlb-season-predictor`.
 
