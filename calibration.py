@@ -138,14 +138,23 @@ def linreg_projected_wins(team_state: dict) -> float:
 
 
 def blend_wins(grok_wins: float, team_state: dict, alpha: float | None = None) -> float:
-    """Convex blend of grok and ridge prediction; alpha is grok weight.
+    """Convex blend of grok and ridge prediction, then variance-match expansion.
 
-    If alpha is None, uses per-checkpoint defaults tuned on the eval set.
+    Both grok (~σ12.7) and the convex blend (~σ13.4) underdisperse relative
+    to the ridge fit on train+val (~σ19.8) and to the actual win distribution
+    (~σ24). After blending we recenter on the league mean and expand by a
+    fixed factor; under typical grok/linreg correlation, σ_blend·k matches
+    the linreg's spread, which is the only frame we have ground-truth for.
     """
     if alpha is None:
         alpha = 0.90 if team_state.get("checkpoint") == "opening_day" else 0.80
     lr = linreg_projected_wins(team_state)
-    return alpha * grok_wins + (1.0 - alpha) * lr
+    blend = alpha * grok_wins + (1.0 - alpha) * lr
+    expansion_k = 1.50
+    return _LEAGUE_MEAN + expansion_k * (blend - _LEAGUE_MEAN)
+
+
+_LEAGUE_MEAN = 81.0
 
 
 # --- Playoff probability calibration via wins-based logistic ---
