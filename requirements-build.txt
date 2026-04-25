@@ -1,0 +1,4 @@
+# Extra deps for the task author when (re)building the data bundle.
+# Agents do NOT need these — prepare.sh just downloads the prebuilt bundle.
+-r requirements.txt
+pybaseball>=2.2.7

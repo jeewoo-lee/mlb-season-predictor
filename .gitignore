@@ -7,5 +7,11 @@ __pycache__/
 *.pyc
 data/*.parquet
 data/raw/
+data/train/*.csv
+data/val/*.csv
+eval/test_data/*.csv
 models/
 outputs/
+dist/
+eval/.identity_map.json
+.claude/

@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST_PATH = ROOT / "eval" / "test_data" / "mlb_frozen_2024_2025.csv"
-ROSTER_PATH = ROOT / "eval" / "test_data" / "player_states_2024_2025.csv"
+TEST_PATH = ROOT / "eval" / "test_data" / "frozen_test.csv"
+ROSTER_PATH = ROOT / "eval" / "test_data" / "frozen_test_players.csv"
 sys.path.insert(0, str(ROOT))
 
 from features import clamp, load_rosters, load_rows, roster_key  # noqa: E402
@@ -45,7 +45,8 @@ def assign_predicted_ranks(scored_rows: list[dict]) -> None:
         for rank, item in enumerate(overall, start=1):
             item["pred_overall_rank"] = rank
 
-        for league in ("AL", "NL"):
+        leagues = sorted({item["row"]["league"] for item in group_items})
+        for league in leagues:
             league_items = [item for item in overall if item["row"]["league"] == league]
             for rank, item in enumerate(league_items, start=1):
                 item["pred_league_rank"] = rank

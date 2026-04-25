@@ -35,8 +35,8 @@ def main() -> None:
     args = parser.parse_args()
 
     agent = load_agent()
-    rows = load_rows(ROOT / "eval" / "test_data" / "mlb_frozen_2024_2025.csv")
-    rosters = load_rosters(ROOT / "eval" / "test_data" / "player_states_2024_2025.csv")
+    rows = load_rows(ROOT / "eval" / "test_data" / "frozen_test.csv")
+    rosters = load_rosters(ROOT / "eval" / "test_data" / "frozen_test_players.csv")
     team_states = []
     for row in rows:
         state = dict(row)
