@@ -53,7 +53,7 @@ The primary target is binary playoff qualification. The eval also scores project
 This task is deliberately API-first rather than GPU-first. Suggested defaults:
 
 - Provider: xAI-compatible or OpenAI-compatible chat API.
-- Model env var: `XAI_MODEL`, defaulting in your code to a strong Grok-family model such as `grok-4.20` if available.
+- Model env var: `XAI_MODEL`, defaulting in your code to `grok-4-1-fast-reasoning`.
 - Credential env var: `XAI_API_KEY`.
 - Endpoint env var: `XAI_BASE_URL`, if the SDK requires one.
 
