@@ -285,26 +285,30 @@ def pull_half_season_stats(year: int, team_mlb_id: int, end_date: str) -> dict[s
 
 
 def pull_half_season_record(year: int, team_mlb_id: int, end_date: str) -> dict:
-    """Half-season W-L record for checkpoint_wins_above_pace."""
+    """Half-season W-L + RS/RA totals for checkpoint stats (real, known by July)."""
     cache = f"team_record_half_{team_mlb_id}_{year}.json"
     js = cached_get(cache, "schedule",
                     sportId=1, season=year, teamId=team_mlb_id,
                     startDate=f"{year}-03-15", endDate=end_date,
                     gameType="R")
-    wins = losses = 0
+    wins = losses = rs = ra = 0
     for date in js.get("dates", []):
         for game in date.get("games", []):
             if game.get("status", {}).get("abstractGameState") != "Final":
                 continue
             home = game["teams"]["home"]
             away = game["teams"]["away"]
-            for side in (home, away):
+            for side, opp in ((home, away), (away, home)):
                 if side["team"]["id"] == team_mlb_id:
-                    if side.get("isWinner"):
+                    if side.get("isWinner") is True:
                         wins += 1
                     elif side.get("isWinner") is False:
                         losses += 1
-    return {"wins": wins, "losses": losses, "games": wins + losses}
+                    rs += int(side.get("score") or 0)
+                    ra += int(opp.get("score") or 0)
+                    break
+    return {"wins": wins, "losses": losses, "games": wins + losses,
+            "runs_scored": rs, "runs_allowed": ra}
 
 
 # ---------------------------------------------------------------------------
@@ -317,30 +321,25 @@ def pythag_win_pct(rs: float, ra: float, exp: float = 1.83) -> float:
     return (rs ** exp) / (rs ** exp + ra ** exp)
 
 
-def derive_team_war(team: dict) -> dict:
-    """Synthesize WAR breakdowns from real RS/RA + roster size.
+def war_proxy(rs: float, ra: float, games: float) -> dict:
+    """Synthesize WAR breakdowns from RS/RA over `games` games.
 
-    These are PROXIES for the FanGraphs WAR breakdown the original schema
-    expected. They preserve the relative ordering (good teams have higher
-    derived WAR) but are not literal FanGraphs values.
+    PROXY for FanGraphs WAR; preserves relative ordering. The caller is
+    responsible for passing inputs known AT THE CHECKPOINT (prior-year
+    full-season for opening_day; first-half-only for all_star). Never pass
+    end-of-current-season RS/RA at opening_day — that leaks the label.
     """
-    pythag = pythag_win_pct(team["runs_scored"], team["runs_allowed"])
-    expected_wins = pythag * (team["wins"] + team["losses"])  # uses games played
-    # Replacement-level reference: 48 wins per 162-game season.
-    games = team["wins"] + team["losses"]
-    war_per_game = (expected_wins - 48 * games / 162) / games if games else 0
+    if games <= 0:
+        return {"team_war_total": 30.0, "pos_war": 15.6, "sp_war": 9.3, "rp_war": 5.1}
+    pythag = pythag_win_pct(rs, ra)
+    expected_wins = pythag * games
+    war_per_game = (expected_wins - 48 * games / 162) / games
     team_war_total = max(5.0, war_per_game * 162)
-
-    # Split by unit using rough public-domain heuristics:
-    # ~52% position-player WAR, ~31% starter WAR, ~17% reliever WAR.
-    pos_war = team_war_total * 0.52
-    sp_war = team_war_total * 0.31
-    rp_war = team_war_total * 0.17
     return {
         "team_war_total": team_war_total,
-        "pos_war": pos_war,
-        "sp_war": sp_war,
-        "rp_war": rp_war,
+        "pos_war": team_war_total * 0.52,
+        "sp_war": team_war_total * 0.31,
+        "rp_war": team_war_total * 0.17,
     }
 
 
@@ -348,29 +347,70 @@ def make_team_row(year: int, checkpoint: str, abbrev: str, team: dict,
                   prev_team: dict | None,
                   league_strengths: dict[str, float],
                   division_strengths: dict[str, float],
-                  half_record: dict | None = None) -> dict:
-    """Produce one team_states row in the original schema."""
+                  half_record: dict | None = None,
+                  half_runs: dict | None = None) -> dict:
+    """Produce one team_states row in the original schema.
+
+    Critical: for opening_day, all "team strength" features (WAR breakdowns,
+    pythagorean, etc.) MUST come from prior-year stats — passing the current
+    year's RS/RA/wins would leak the answer into the features. For all_star,
+    use first-half stats (real, known by mid-July).
+    """
     rng = random.Random(year * 1000 + hash(abbrev) % 1000 + (13 if checkpoint == "all_star" else 0))
-    war = derive_team_war(team)
+
+    # Pick the source of truth for "team strength as of this checkpoint":
+    if checkpoint == "opening_day":
+        # Use prior year's full-season stats (regressed slightly toward league avg).
+        if prev_team is not None:
+            war = war_proxy(
+                rs=prev_team["runs_scored"],
+                ra=prev_team["runs_allowed"],
+                games=prev_team["wins"] + prev_team["losses"],
+            )
+            ckpt_pythag = pythag_win_pct(prev_team["runs_scored"], prev_team["runs_allowed"])
+        else:
+            war = war_proxy(720, 720, 162)  # league-average team
+            ckpt_pythag = 0.500
+    else:
+        # all_star: use first-half stats only (real and known by July 15).
+        if half_record and half_record["games"] > 0 and half_runs:
+            war = war_proxy(
+                rs=half_runs.get("runs_scored", 350),
+                ra=half_runs.get("runs_allowed", 350),
+                games=half_record["games"],
+            )
+            ckpt_pythag = pythag_win_pct(
+                half_runs.get("runs_scored", 350),
+                half_runs.get("runs_allowed", 350),
+            )
+        else:
+            war = war_proxy(350, 350, 81)
+            ckpt_pythag = 0.500
+
     # Distribute SP WAR across SP1-SP7 with declining weights.
     sp_weights = [1.25, 1.08, 0.93, 0.78, 0.62, 0.45, 0.32]
     norm = sum(sp_weights)
     sp_parts = [war["sp_war"] * w / norm for w in sp_weights]
 
-    # Projection systems = derived team WAR + system-specific noise.
-    # Anchor on prior-year actual when available (real opening-day projections
-    # are essentially regressed prior-year WAR).
-    base_war = war["team_war_total"]
-    if prev_team is not None and checkpoint == "opening_day":
-        prev_war = derive_team_war(prev_team)["team_war_total"]
-        base_war = 0.55 * prev_war + 0.45 * 30.0  # regress to league avg ~30
+    # Projection systems = team_war + system-specific noise. Real preseason
+    # projections regress heavily toward league average; mimic that for
+    # opening_day.
+    if checkpoint == "opening_day":
+        base_war = 0.55 * war["team_war_total"] + 0.45 * 30.0
+    else:
+        # All-star checkpoint: projections updated with first-half evidence,
+        # less regression.
+        base_war = 0.80 * war["team_war_total"] + 0.20 * 30.0
     dc = base_war + rng.gauss(0, 2.4)
     steamer = base_war + rng.gauss(0, 2.2)
     zips = base_war + rng.gauss(0, 2.6)
 
-    pythag = pythag_win_pct(team["runs_scored"], team["runs_allowed"])
+    pythag = ckpt_pythag
+
+    # checkpoint_wins_above_pace = wins above .500 pace at this checkpoint,
+    # scaled to a full-season delta.
     if checkpoint == "all_star" and half_record and half_record["games"] > 0:
-        pace = (half_record["wins"] - 0.5 * half_record["games"]) * 2  # wins above .500 pace, scaled to full season
+        pace = (half_record["wins"] - 0.5 * half_record["games"]) * (162.0 / half_record["games"])
     else:
         pace = 0.0
 
@@ -378,11 +418,8 @@ def make_team_row(year: int, checkpoint: str, abbrev: str, team: dict,
     schedule = league_strengths.get(team["league"], 0.0)
     div_str = division_strengths.get(team["division"], 0.0)
 
-    # Real outcomes
-    actual_wins = team["wins"] if checkpoint == "opening_day" else (
-        # all_star: still predict full-season wins; the actual_wins label is the same final total
-        team["wins"]
-    )
+    # The label being predicted is always full-season actual wins.
+    actual_wins = team["wins"]
 
     return {
         "season": year,
@@ -572,9 +609,13 @@ def build_year(year: int) -> tuple[list[dict], list[dict]]:
 
     prev_year_data = pull_standings(year - 1) if year > 2010 else {}
 
-    # Pull leaderboards once per (year, group)
-    lb_hit = pull_player_stats_leaderboard(year, "hitting")
-    lb_pit = pull_player_stats_leaderboard(year, "pitching")
+    # Player leaderboards: opening_day uses PRIOR year (real preseason knowledge);
+    # all_star uses current year (first half only is real-but-leaderboards-are-full-season,
+    # so this is an approximation — we accept it for now as a known limitation).
+    lb_hit_prior = pull_player_stats_leaderboard(year - 1, "hitting") if year > 2010 else {}
+    lb_pit_prior = pull_player_stats_leaderboard(year - 1, "pitching") if year > 2010 else {}
+    lb_hit_curr = pull_player_stats_leaderboard(year, "hitting")
+    lb_pit_curr = pull_player_stats_leaderboard(year, "pitching")
 
     team_rows: list[dict] = []
     player_rows: list[dict] = []
@@ -583,26 +624,29 @@ def build_year(year: int) -> tuple[list[dict], list[dict]]:
         checkpoints.append("all_star")
 
     for checkpoint in checkpoints:
-        if checkpoint == "opening_day":
-            roster_date = f"{year}-04-01"
-            half_records: dict[str, dict] = {}
-        else:
-            roster_date = f"{year}-04-01"  # use opening-day roster as the snapshot; pull half-season record below
+        roster_date = f"{year}-04-01"
+        if checkpoint == "all_star":
             half_records = {abbrev: pull_half_season_record(year, t["team_mlb_id"], f"{year}-07-15")
                             for abbrev, t in teams.items()}
+        else:
+            half_records = {}
+
+        # Pick the leaderboards appropriate for this checkpoint.
+        lb_hit = lb_hit_curr if checkpoint == "all_star" else lb_hit_prior
+        lb_pit = lb_pit_curr if checkpoint == "all_star" else lb_pit_prior
 
         for abbrev, team in teams.items():
             half = half_records.get(abbrev)
             row = make_team_row(year, checkpoint, abbrev, team,
                                 prev_year_data.get(abbrev),
-                                league_strengths, division_strengths, half)
+                                league_strengths, division_strengths,
+                                half_record=half, half_runs=half)
             team_rows.append(row)
 
             roster = pull_roster(team["team_mlb_id"], year, roster_date)
             for slot, entry in enumerate(roster, start=1):
-                war_breakdown = derive_team_war(team)
                 prow = make_player_row(year, checkpoint, abbrev, slot, entry,
-                                       lb_hit, lb_pit, war_breakdown)
+                                       lb_hit, lb_pit, team_war_breakdown={})
                 player_rows.append(prow)
 
     return team_rows, player_rows
