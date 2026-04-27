@@ -14,4 +14,5 @@ models/
 outputs/
 dist/
 eval/.identity_map.json
+eval/.frozen_labels.csv
 .claude/

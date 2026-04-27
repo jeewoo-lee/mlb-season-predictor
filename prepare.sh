@@ -3,16 +3,16 @@
 #
 # The bundle contains real MLB stats 2010-2025 with anonymized identifiers
 # (team names, season labels, divisions, leagues) so memorization-based
-# shortcuts cannot win — only structured-stat reasoning helps. The bundle is
-# built and signed by the task author via scripts/build_data_bundle.py;
-# agents only ever run this thin downloader.
+# shortcuts cannot win — only structured-stat reasoning helps. The public
+# bundle contains frozen features only; private labels are mounted separately
+# by the evaluator.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DATA_URL="${MLB_DATA_URL:-https://github.com/jeewoo-lee/mlb-season-predictor/releases/download/mlb-data-v1/mlb_season_data_v1.zip}"
-DATA_SHA256="${MLB_DATA_SHA256:-a79b5beab18d0e1af795fc2167873c8aa38121303463712a83e8b197e2534efc}"
+DATA_URL="${MLB_DATA_URL:-https://github.com/jeewoo-lee/mlb-season-predictor/releases/download/mlb-data-v2/mlb_season_data_v2.zip}"
+DATA_SHA256="${MLB_DATA_SHA256:-c8fe8f0cce236e1a86e4fe960f0f06a3be38aeb0a7c20b4c79f57442d2775011}"
 CACHE="${MLB_CACHE_DIR:-$HOME/.cache/mlb-season-predictor}"
-ZIP="$CACHE/mlb_season_data_v1.zip"
+ZIP="$CACHE/mlb_season_data_v2.zip"
 
 mkdir -p "$CACHE" data/train data/val eval/test_data
 

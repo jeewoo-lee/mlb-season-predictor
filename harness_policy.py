@@ -19,6 +19,18 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
+FORBIDDEN_TARGET_KEYS: frozenset[str] = frozenset(
+    {
+        "actual_wins",
+        "overall_rank",
+        "league_rank",
+        "division_rank",
+        "made_playoffs",
+        "won_division",
+        "league_champion",
+        "world_series_champion",
+    }
+)
 
 # Always include for interpretability and league/rank context.
 MANDATORY_TEAM_KEYS: tuple[str, ...] = (
@@ -154,11 +166,15 @@ def _dedupe_preserve(keys: list[str] | tuple[str, ...]) -> list[str]:
     return out
 
 
+def _drop_forbidden(keys: list[str]) -> list[str]:
+    return [key for key in keys if key not in FORBIDDEN_TARGET_KEYS]
+
+
 def _group_keys(groups: list[str] | tuple[str, ...], registry: dict[str, list[str]]) -> list[str]:
     keys: list[str] = []
     for group in groups:
         keys.extend(registry.get(group, []))
-    return _dedupe_preserve(keys)
+    return _drop_forbidden(_dedupe_preserve(keys))
 
 
 def _team_keys_from_groups(groups: list[str] | tuple[str, ...]) -> list[str]:
@@ -188,14 +204,14 @@ def _policy_from_path(path: Path) -> dict[str, Any] | None:
     selected_player_groups = list(data.get("selected_player_groups", []))
 
     if "team_keys" in data:
-        team_keys = _dedupe_preserve([*MANDATORY_TEAM_KEYS, *list(data["team_keys"])])
+        team_keys = _drop_forbidden(_dedupe_preserve([*MANDATORY_TEAM_KEYS, *list(data["team_keys"])]))
     else:
         if not selected_team_groups:
             selected_team_groups = list(DEFAULT_SELECTED_TEAM_GROUPS)
         team_keys = _team_keys_from_groups(selected_team_groups)
 
     if "player_keys" in data:
-        player_keys = _dedupe_preserve([*PLAYER_BASE_KEYS, *list(data["player_keys"])])
+        player_keys = _drop_forbidden(_dedupe_preserve([*PLAYER_BASE_KEYS, *list(data["player_keys"])]))
     else:
         if not selected_player_groups:
             selected_player_groups = list(DEFAULT_SELECTED_PLAYER_GROUPS)

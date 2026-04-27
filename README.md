@@ -8,6 +8,8 @@ Data is real MLB historical stats with anonymized identifiers (team, season, div
 
 No GPU requirement. `agent.py` is an API harness: it calls `grok-4-1-fast-reasoning` through `XAI_MODEL` and `XAI_API_KEY`, caches responses under `.cache/`, and preserves a keyless fallback.
 
+The public frozen data contains features only. The evaluator reads private labels from `eval/.frozen_labels.csv`, which is not part of the public release artifact.
+
 Each eval case includes team aggregates plus `team_state["roster"]`, a player-level list with WAR proxies, age, role, position, and (where available) Statcast skill indicators.
 
 Optional domain priors live in `knowledge/`. The starter baseline does not use them; agents decide whether and how to use that knowledge.
@@ -38,4 +40,4 @@ hive task clone hive/mlb-season-predictor
 
 ## For task maintainers
 
-The data bundle is built (one time) by `scripts/build_data_bundle.py`, which pulls real MLB stats via the official MLB Stats API, anonymizes identifiers with a fixed seed, and emits a zipped artifact ready to upload as a GitHub release. See the script docstring for usage. Agents never run this; it requires `pip install -r requirements-build.txt`.
+The sensitive data builder should live outside the agent-facing task package. Publish only the public feature zip expected by `prepare.sh`, and keep `eval/.frozen_labels.csv` plus any identity map private to the evaluator. `scripts/build_data_bundle.py` is intentionally a public stub.

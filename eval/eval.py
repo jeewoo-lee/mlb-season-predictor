@@ -8,10 +8,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_PATH = ROOT / "eval" / "test_data" / "frozen_test.csv"
+LABEL_PATH = ROOT / "eval" / ".frozen_labels.csv"
 ROSTER_PATH = ROOT / "eval" / "test_data" / "frozen_test_players.csv"
 sys.path.insert(0, str(ROOT))
 
 from features import clamp, load_rosters, load_rows, roster_key  # noqa: E402
+
+LABEL_COLUMNS = {
+    "actual_wins",
+    "overall_rank",
+    "league_rank",
+    "division_rank",
+    "made_playoffs",
+    "won_division",
+    "league_champion",
+    "world_series_champion",
+}
+LABEL_KEY_COLUMNS = ("season", "checkpoint", "team_id")
 
 
 def load_agent():
@@ -23,6 +36,39 @@ def load_agent():
     if not hasattr(module, "predict"):
         raise RuntimeError("agent.py must define predict(team_state)")
     return module
+
+
+def label_key(row: dict) -> tuple[int, str, str]:
+    return (int(row["season"]), str(row["checkpoint"]), str(row["team_id"]))
+
+
+def split_features_and_labels(rows: list[dict]) -> tuple[list[dict], dict[tuple[int, str, str], dict]]:
+    """Compatibility path for old frozen_test.csv files that still contain labels."""
+    features: list[dict] = []
+    labels: dict[tuple[int, str, str], dict] = {}
+    for row in rows:
+        features.append({k: v for k, v in row.items() if k not in LABEL_COLUMNS})
+        labels[label_key(row)] = {
+            k: row[k] for k in (*LABEL_KEY_COLUMNS, *LABEL_COLUMNS) if k in row
+        }
+    return features, labels
+
+
+def load_frozen_features_and_labels() -> tuple[list[dict], dict[tuple[int, str, str], dict]]:
+    """Load public frozen features and private labels.
+
+    New task bundles ship `frozen_test.csv` without labels and keep
+    `.frozen_labels.csv` private to the evaluator. The fallback keeps existing
+    local bundles runnable while still stripping label fields before predict().
+    """
+    rows = load_rows(TEST_PATH)
+    if LABEL_PATH.exists():
+        labels = {label_key(row): row for row in load_rows(LABEL_PATH)}
+        features = [{k: v for k, v in row.items() if k not in LABEL_COLUMNS} for row in rows]
+        return features, labels
+    if rows and LABEL_COLUMNS.issubset(rows[0].keys()):
+        return split_features_and_labels(rows)
+    raise SystemExit("missing private frozen labels; evaluator requires eval/.frozen_labels.csv")
 
 
 def binary_loss(prob: float, label: int) -> float:
@@ -65,7 +111,7 @@ def main() -> None:
         raise SystemExit("missing frozen test data; run bash prepare.sh first")
 
     agent = load_agent()
-    rows = load_rows(TEST_PATH)
+    rows, labels = load_frozen_features_and_labels()
     rosters = load_rosters(ROSTER_PATH)
     scored_rows = []
 
@@ -74,9 +120,13 @@ def main() -> None:
         team_state["roster"] = rosters.get(roster_key(row), [])
         pred = agent.predict(team_state)
         projected_wins = clamp(float(pred["projected_wins"]), 40.0, 122.0)
+        label = labels.get(label_key(row))
+        if label is None:
+            raise RuntimeError(f"missing frozen label for {label_key(row)}")
         scored_rows.append(
             {
                 "row": row,
+                "label": label,
                 "pred": pred,
                 "projected_wins": projected_wins,
             }
@@ -95,27 +145,28 @@ def main() -> None:
 
     for item in scored_rows:
         row = item["row"]
+        label = item["label"]
         pred = item["pred"]
         projected_wins = item["projected_wins"]
         league_rank_abs_error += abs(
-            int(item["pred_league_rank"]) - int(row["league_rank"])
+            int(item["pred_league_rank"]) - int(label["league_rank"])
         )
         overall_rank_abs_error += abs(
-            int(item["pred_overall_rank"]) - int(row["overall_rank"])
+            int(item["pred_overall_rank"]) - int(label["overall_rank"])
         )
         division_rank_abs_error += abs(
-            int(item["pred_division_rank"]) - int(row["division_rank"])
+            int(item["pred_division_rank"]) - int(label["division_rank"])
         )
-        exact_league_rank += int(int(item["pred_league_rank"]) == int(row["league_rank"]))
-        win_abs_error += abs(projected_wins - float(row["actual_wins"]))
+        exact_league_rank += int(int(item["pred_league_rank"]) == int(label["league_rank"]))
+        win_abs_error += abs(projected_wins - float(label["actual_wins"]))
         league_champion_loss += binary_loss(
-            pred.get("league_champion_prob", 1.0 / 15.0), int(row["league_champion"])
+            pred.get("league_champion_prob", 1.0 / 15.0), int(label["league_champion"])
         )
         world_series_loss += binary_loss(
             pred.get("world_series_champion_prob", 1.0 / 30.0),
-            int(row["world_series_champion"]),
+            int(label["world_series_champion"]),
         )
-        playoff_loss += binary_loss(pred.get("playoff_prob", 0.5), int(row["made_playoffs"]))
+        playoff_loss += binary_loss(pred.get("playoff_prob", 0.5), int(label["made_playoffs"]))
 
     total = len(scored_rows)
     rank_mae = league_rank_abs_error / total

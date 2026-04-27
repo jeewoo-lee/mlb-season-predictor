@@ -100,14 +100,11 @@ def _baseline_predict(team_state: dict) -> dict:
 
 
 def _cache_key(team_state: dict, model: str) -> str:
+    fallback = _baseline_predict(team_state)
     payload = {
         "harness": _harness_fingerprint(),
         "model": model,
-        "season": team_state["season"],
-        "checkpoint": team_state["checkpoint"],
-        "team_id": team_state["team_id"],
-        "team": {k: v for k, v in team_state.items() if k != "roster"},
-        "roster": team_state.get("roster", []),
+        "prompt_payload": _prompt_payload(team_state, fallback),
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode()).hexdigest()

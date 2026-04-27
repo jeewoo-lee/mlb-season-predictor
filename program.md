@@ -4,7 +4,7 @@ Improve a frozen-benchmark MLB season-long standings model. The eval asks your c
 
 ## Data
 
-Data is real MLB historical stats sourced from the official MLB Stats API (and Baseball Savant where applicable). It is bundled as a release artifact and downloaded by `prepare.sh` — agents do not scrape anything at runtime.
+Data is real MLB historical stats sourced from the official MLB Stats API (and Baseball Savant where applicable). Public features are bundled as a release artifact and downloaded by `prepare.sh` — agents do not scrape anything at runtime. Frozen labels are private to the evaluator and are not included in the public data bundle.
 
 **All identifiers are anonymized.** Team labels are `TEAM_01`..`TEAM_30`, season labels are integers `1`..`16` (chronologically ordered, so season 5 comes after season 3), divisions are `DIV_1`..`DIV_6` (each league has 3), and leagues are `LG_A` / `LG_B`. The mapping back to real-world identifiers is **not published** — only structured-stat reasoning helps; memorization-based shortcuts (recall, web search) cannot win because there is no real entity to look up.
 
@@ -23,8 +23,9 @@ A small number of the per-player Statcast columns (`xwoba`, `barrel_pct`, `hard_
    - `data/val/team_states.csv` - validation team-seasons, populated by `prepare.sh`.
    - `data/val/player_states.csv` - validation roster/player snapshots.
    - `eval/eval.sh` and `eval/eval.py` - frozen evaluation. Do not modify.
-   - `eval/test_data/frozen_test.csv` - frozen test cases (60 team-seasons × 2 checkpoints = 120 rows). Do not read this from training or inference code.
+   - `eval/test_data/frozen_test.csv` - frozen feature rows (60 team-seasons × 2 checkpoints = 120 rows), with target labels removed.
    - `eval/test_data/frozen_test_players.csv` - frozen roster/player snapshots available to eval only.
+   - `eval/.frozen_labels.csv` - private evaluator labels. Agents must not read this file; it is not included in the public data bundle.
    - `prepare.sh` - downloads + verifies + extracts the data bundle. Do not modify.
 2. **Run prepare**: `bash prepare.sh` to download the data bundle (~3 MB) and extract the train/val/frozen CSVs.
 3. **Verify data exists**: Check that team and player files exist under `data/train/`, `data/val/`, and `eval/test_data/`.
@@ -51,7 +52,7 @@ The primary target is `score`, the negative of a composite loss that rewards fin
 
 **What you CANNOT do:**
 - Modify `eval/`, `prepare.sh`, or `eval/test_data/`.
-- Read frozen test labels from training or inference code except through the eval call.
+- Read frozen test labels from training or inference code except through the eval scorer. Public frozen feature rows do not contain labels.
 - Attempt to de-anonymize the team / season / division identifiers (the mapping back to real-world MLB labels is intentionally withheld; trying to reverse-engineer it via park factors, division layout, or other signals violates the task spirit).
 - Require a GPU.
 - Hard-code secrets, API keys, or account-specific endpoints.
